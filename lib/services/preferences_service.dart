@@ -63,19 +63,6 @@ class PreferencesService {
     await updatePreferences(prefs);
   }
 
-  // Get sidebar position
-  Future<String> getSidebarPosition() async {
-    final prefs = await getPreferences();
-    return prefs['sidebarPosition'] as String? ?? 'left';
-  }
-
-  // Set sidebar position
-  Future<void> setSidebarPosition(String position) async {
-    final prefs = await getPreferences();
-    prefs['sidebarPosition'] = position;
-    await updatePreferences(prefs);
-  }
-
   // Get remember me
   Future<bool> getRememberMe() async {
     try {
@@ -101,17 +88,14 @@ class PreferencesService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final theme = prefs.getString(AppConstants.themeKey) ?? 'light';
-      final sidebarPosition = prefs.getString(AppConstants.sidebarPositionKey) ?? 'left';
 
       return {
         'theme': theme,
-        'sidebarPosition': sidebarPosition,
       };
     } catch (e) {
       // Return default preferences if SharedPreferences is not available
       return {
         'theme': 'light',
-        'sidebarPosition': 'left',
       };
     }
   }
@@ -122,13 +106,6 @@ class PreferencesService {
       
       if (preferences.containsKey('theme')) {
         await prefs.setString(AppConstants.themeKey, preferences['theme'] as String);
-      }
-      
-      if (preferences.containsKey('sidebarPosition')) {
-        await prefs.setString(
-          AppConstants.sidebarPositionKey,
-          preferences['sidebarPosition'] as String,
-        );
       }
     } catch (e) {
       // Ignore errors

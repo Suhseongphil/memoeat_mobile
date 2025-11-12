@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/folders_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../models/folder.dart';
 
 class MobileFolderTreeSheet extends StatelessWidget {
@@ -33,9 +32,6 @@ class MobileFolderTreeSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final foldersProvider = context.watch<FoldersProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.user;
-    final userName = user?.email?.split('@').first ?? 'Root';
 
     return Container(
       decoration: BoxDecoration(
@@ -117,7 +113,7 @@ class MobileFolderTreeSheet extends StatelessWidget {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                userName,
+                                '메인',
                                 style: TextStyle(
                                   fontWeight: selectedFolderId == null
                                       ? FontWeight.w600

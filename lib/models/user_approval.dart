@@ -19,7 +19,6 @@ class UserApproval {
     Map<String, dynamic>? preferences,
   }) : preferences = preferences ?? {
           'theme': 'light',
-          'sidebarPosition': 'left',
         };
 
   factory UserApproval.fromJson(Map<String, dynamic> json) {
