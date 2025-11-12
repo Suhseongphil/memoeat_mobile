@@ -3,6 +3,22 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/notes_provider.dart';
 import '../../providers/folders_provider.dart';
+import '../../services/folders_service.dart';
+import '../../config/supabase.dart';
+import '../../models/folder.dart';
+import '../../models/note.dart';
+
+class ChildInfo {
+  final int folderCount;
+  final int noteCount;
+  final int totalCount;
+
+  ChildInfo({
+    required this.folderCount,
+    required this.noteCount,
+    required this.totalCount,
+  });
+}
 
 class TrashView extends StatefulWidget {
   const TrashView({super.key});
@@ -13,18 +29,46 @@ class TrashView extends StatefulWidget {
 
 class _TrashViewState extends State<TrashView> {
   bool _hasLoaded = false;
+  List<Folder> _allDeletedFolders = [];
+  List<Note> _allDeletedNotes = [];
 
   @override
   void initState() {
     super.initState();
     // Load deleted items once when the view is first created
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_hasLoaded && mounted) {
         _hasLoaded = true;
         final notesProvider = context.read<NotesProvider>();
         final foldersProvider = context.read<FoldersProvider>();
         notesProvider.loadDeletedNotes();
         foldersProvider.loadDeletedFolders();
+        
+        // Load all deleted items for child count calculation
+        final foldersService = FoldersService();
+        final allFolders = await foldersService.getFolders(includeDeleted: true);
+        
+        // Get all notes directly from Supabase to avoid folder filtering
+        final supabase = SupabaseConfig.client;
+        final user = supabase.auth.currentUser;
+        if (user != null) {
+          final allNotesResponse = await supabase
+              .from('notes')
+              .select()
+              .eq('user_id', user.id)
+              .order('created_at', ascending: false);
+          
+          final allNotes = (allNotesResponse as List)
+              .map((json) => Note.fromJson(json))
+              .toList();
+          
+          if (mounted) {
+            setState(() {
+              _allDeletedFolders = allFolders.where((f) => f.deletedAt != null).toList();
+              _allDeletedNotes = allNotes.where((n) => n.deletedAt != null).toList();
+            });
+          }
+        }
       }
     });
   }
@@ -79,29 +123,36 @@ class _TrashViewState extends State<TrashView> {
                           ),
                     ),
                   ),
-                  ...deletedFolders.map((folder) => _buildTrashItem(
+                  ...deletedFolders.map((folder) {
+                    // Calculate child counts
+                    final childInfo = _calculateChildInfo(
+                      folder.id,
+                      _allDeletedFolders,
+                      _allDeletedNotes,
+                    );
+                    return _buildFolderTrashItem(
+                      context,
+                      folder,
+                      childInfo,
+                      onRestore: () async {
+                        final success = await foldersProvider.restoreFolder(folder.id);
+                        if (success && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('폴더가 복구되었습니다'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                      onDelete: () => _showPermanentDeleteDialog(
                         context,
+                        '폴더',
                         folder.data.name,
-                        folder.deletedAt!,
-                        Icons.folder_outlined,
-                        onRestore: () async {
-                          final success = await foldersProvider.restoreFolder(folder.id);
-                          if (success && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('폴더가 복구되었습니다'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                        onDelete: () => _showPermanentDeleteDialog(
-                          context,
-                          '폴더',
-                          folder.data.name,
-                          () => foldersProvider.permanentlyDeleteFolder(folder.id),
-                        ),
-                      )),
+                        () => foldersProvider.permanentlyDeleteFolder(folder.id),
+                      ),
+                    );
+                  }),
                 ],
 
                 // Deleted notes
@@ -121,14 +172,30 @@ class _TrashViewState extends State<TrashView> {
                         note.deletedAt!,
                         Icons.description_outlined,
                         onRestore: () async {
-                          final success = await notesProvider.restoreNote(note.id);
-                          if (success && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('메모가 복구되었습니다'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                          try {
+                            final success = await notesProvider.restoreNote(note.id);
+                            if (success && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('메모가 복구되었습니다'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    e.toString().contains('parent folder is deleted')
+                                        ? '상위 폴더가 삭제된 메모는 개별 복구할 수 없습니다. 상위 폴더를 먼저 복구해주세요.'
+                                        : '복구 중 오류가 발생했습니다: ${e.toString()}'
+                                  ),
+                                  backgroundColor: Colors.red,
+                                  duration: const Duration(seconds: 4),
+                                ),
+                              );
+                            }
                           }
                         },
                         onDelete: () => _showPermanentDeleteDialog(
@@ -180,6 +247,100 @@ class _TrashViewState extends State<TrashView> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFolderTrashItem(
+    BuildContext context,
+    Folder folder,
+    ChildInfo childInfo, {
+    required VoidCallback onRestore,
+    required VoidCallback onDelete,
+  }) {
+    final subtitleParts = <String>['삭제됨: ${_formatDate(folder.deletedAt!)}'];
+    
+    if (childInfo.totalCount > 0) {
+      final parts = <String>[];
+      if (childInfo.folderCount > 0) {
+        parts.add('폴더 ${childInfo.folderCount}개');
+      }
+      if (childInfo.noteCount > 0) {
+        parts.add('메모 ${childInfo.noteCount}개');
+      }
+      if (parts.isNotEmpty) {
+        subtitleParts.add('하위 항목: ${parts.join(', ')}');
+      }
+    }
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ListTile(
+        leading: Icon(Icons.folder_outlined, color: Colors.grey[600]),
+        title: Text(
+          folder.data.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: subtitleParts.map((part) => Text(part)).toList(),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.restore),
+              onPressed: onRestore,
+              tooltip: '복구',
+              color: Colors.blue,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_forever),
+              onPressed: onDelete,
+              tooltip: '영구 삭제',
+              color: Colors.red,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ChildInfo _calculateChildInfo(
+    String folderId,
+    List<Folder> allDeletedFolders,
+    List<Note> allDeletedNotes,
+  ) {
+    int folderCount = 0;
+    int noteCount = 0;
+    
+    // Recursively count children
+    void countChildren(String parentId) {
+      // Count direct child folders
+      final childFolders = allDeletedFolders
+          .where((f) => f.data.parentId == parentId)
+          .toList();
+      folderCount += childFolders.length;
+      
+      // Count notes directly in this folder
+      final notesInFolder = allDeletedNotes
+          .where((n) => n.data.folderId == parentId)
+          .toList();
+      noteCount += notesInFolder.length;
+      
+      // Recursively count children of child folders (including notes in child folders)
+      for (final childFolder in childFolders) {
+        countChildren(childFolder.id);
+      }
+    }
+    
+    countChildren(folderId);
+    
+    return ChildInfo(
+      folderCount: folderCount,
+      noteCount: noteCount,
+      totalCount: folderCount + noteCount,
     );
   }
 

@@ -103,37 +103,75 @@ class _ReorderableNoteListState extends State<ReorderableNoteList> {
             ),
         ],
       ),
-      body: ReorderableListView(
-        padding: const EdgeInsets.all(8),
-        onReorder: _onReorder,
-        children: _notes.map((note) {
-          return Card(
-            key: ValueKey(note.id),
-            margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            child: ListTile(
-              leading: Icon(
-                Icons.drag_handle,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+      body: _notes.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Text('메모가 없습니다'),
               ),
-              title: Text(
-                note.data.title.isEmpty ? '제목 없음' : note.data.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                note.data.updatedAt.toString().substring(0, 16),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              trailing: note.data.isFavorite
-                  ? Icon(
-                      Icons.star,
-                      color: Theme.of(context).colorScheme.primary,
-                    )
-                  : null,
+            )
+          : ReorderableListView(
+              padding: const EdgeInsets.all(8),
+              onReorder: _onReorder,
+              children: _notes.asMap().entries.map((entry) {
+                final index = entry.key;
+                final note = entry.value;
+                return ReorderableDragStartListener(
+                  key: ValueKey(note.id),
+                  index: index,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.drag_handle,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  note.data.title.isEmpty ? '제목 없음' : note.data.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  note.data.updatedAt.toString().substring(0, 16),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (note.data.isFavorite)
+                            Icon(
+                              Icons.star,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
-      ),
     );
   }
 }

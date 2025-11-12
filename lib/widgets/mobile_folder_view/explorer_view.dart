@@ -6,6 +6,9 @@ import '../../providers/tabs_provider.dart';
 import '../../models/folder.dart';
 import '../../models/note.dart';
 import '../note_actions/folder_selector_sheet.dart';
+import '../note_actions/note_action_sheet.dart';
+import '../note_actions/reorderable_note_list.dart';
+import '../folder_actions/folder_action_sheet.dart';
 import 'folder_breadcrumb.dart';
 
 enum ViewMode { icons, list }
@@ -158,6 +161,237 @@ class _ExplorerViewState extends ExplorerViewState {
           const SnackBar(content: Text('삭제되었습니다')),
         );
         _exitSelectionMode();
+      }
+    }
+  }
+
+  // Folder action handlers
+  Future<void> _showFolderActionSheet(Folder folder) async {
+    await FolderActionSheet.show(
+      context: context,
+      folder: folder,
+      onRename: () => _showRenameFolderDialog(folder),
+      onMove: () => _showMoveFolderDialog(folder),
+      onDelete: () => _showDeleteFolderDialog(folder),
+    );
+  }
+
+  // Note action handlers
+  Future<void> _showNoteActionSheet(Note note) async {
+    await NoteActionSheet.show(
+      context: context,
+      note: note,
+      onMoveToFolder: () => _showMoveNoteDialog(note),
+      onReorder: () => _enterReorderMode(note),
+      onDelete: () => _showDeleteNoteDialog(note),
+    );
+  }
+
+  Future<void> _showMoveNoteDialog(Note note) async {
+    await FolderSelectorSheet.show(
+      context: context,
+      currentFolderId: widget.folderId,
+      onFolderSelected: (targetFolderId) async {
+        final notesProvider = context.read<NotesProvider>();
+        final success = await notesProvider.moveNote(note.id, targetFolderId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('메모가 이동되었습니다')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('오류: ${notesProvider.error ?? "알 수 없는 오류"}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  void _enterReorderMode(Note note) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ReorderableNoteList(
+          folderId: widget.folderId,
+          onComplete: () {
+            Navigator.of(context).pop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('순서가 변경되었습니다')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDeleteNoteDialog(Note note) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('메모 삭제'),
+        content: const Text('이 메모를 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final notesProvider = context.read<NotesProvider>();
+      final success = await notesProvider.deleteNote(note.id);
+      
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('메모가 삭제되었습니다')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('오류: ${notesProvider.error ?? "알 수 없는 오류"}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showRenameFolderDialog(Folder folder) async {
+    final controller = TextEditingController(text: folder.data.name);
+    
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('폴더 이름 변경'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: '폴더 이름',
+            hintText: '폴더 이름을 입력하세요',
+          ),
+          autofocus: true,
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              Navigator.of(context).pop(value.trim());
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.of(context).pop(controller.text.trim());
+              }
+            },
+            child: const Text('변경'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != folder.data.name) {
+      final foldersProvider = context.read<FoldersProvider>();
+      final updatedData = folder.data.copyWith(name: newName);
+      final success = await foldersProvider.updateFolder(folder.id, updatedData);
+      
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('폴더 이름이 변경되었습니다')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('오류: ${foldersProvider.error ?? "알 수 없는 오류"}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showMoveFolderDialog(Folder folder) async {
+    await FolderSelectorSheet.show(
+      context: context,
+      currentFolderId: widget.folderId,
+      onFolderSelected: (targetFolderId) async {
+        final foldersProvider = context.read<FoldersProvider>();
+        final success = await foldersProvider.moveFolder(folder.id, targetFolderId);
+        
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('폴더가 이동되었습니다')),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('오류: ${foldersProvider.error ?? "알 수 없는 오류"}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _showDeleteFolderDialog(Folder folder) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('폴더 삭제'),
+        content: const Text('이 폴더와 하위 폴더, 메모가 모두 삭제됩니다. 계속하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final foldersProvider = context.read<FoldersProvider>();
+      final success = await foldersProvider.deleteFolder(folder.id);
+      
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('폴더가 삭제되었습니다')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('오류: ${foldersProvider.error ?? "알 수 없는 오류"}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -417,6 +651,9 @@ class _ExplorerViewState extends ExplorerViewState {
             onTap: _isSelectionMode
                 ? () => _toggleSelection(item.folder!.id)
                 : () => widget.onFolderSelected(item.folder!.id),
+            onLongPress: _isSelectionMode
+                ? null
+                : () => _showFolderActionSheet(item.folder!),
           );
         } else {
           return _NoteIcon(
@@ -429,6 +666,9 @@ class _ExplorerViewState extends ExplorerViewState {
                     tabsProvider.openNote(item.note!);
                     widget.onNoteTap();
                   },
+            onLongPress: _isSelectionMode
+                ? null
+                : () => _showNoteActionSheet(item.note!),
           );
         }
       },
@@ -495,6 +735,9 @@ class _ExplorerViewState extends ExplorerViewState {
               onTap: _isSelectionMode
                   ? () => _toggleSelection(item.folder!.id)
                   : () => widget.onFolderSelected(item.folder!.id),
+              onLongPress: _isSelectionMode
+                  ? null
+                  : () => _showFolderActionSheet(item.folder!),
             ),
           );
         } else {
@@ -548,6 +791,9 @@ class _ExplorerViewState extends ExplorerViewState {
                       tabsProvider.openNote(item.note!);
                       widget.onNoteTap();
                     },
+              onLongPress: _isSelectionMode
+                  ? null
+                  : () => _showNoteActionSheet(item.note!),
             ),
           );
         }
@@ -559,12 +805,14 @@ class _ExplorerViewState extends ExplorerViewState {
 class _FolderIcon extends StatelessWidget {
   final Folder folder;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool isSelectionMode;
   final bool isSelected;
 
   const _FolderIcon({
     required this.folder,
     required this.onTap,
+    this.onLongPress,
     this.isSelectionMode = false,
     this.isSelected = false,
   });
@@ -573,6 +821,7 @@ class _FolderIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -655,12 +904,14 @@ class _FolderIcon extends StatelessWidget {
 class _NoteIcon extends StatelessWidget {
   final Note note;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool isSelectionMode;
   final bool isSelected;
 
   const _NoteIcon({
     required this.note,
     required this.onTap,
+    this.onLongPress,
     this.isSelectionMode = false,
     this.isSelected = false,
   });
@@ -669,6 +920,7 @@ class _NoteIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.only(

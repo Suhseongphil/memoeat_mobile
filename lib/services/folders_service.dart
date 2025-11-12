@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../config/supabase.dart';
 import '../models/folder.dart';
+import '../models/note.dart';
 import 'package:uuid/uuid.dart';
 
 class FoldersService {
@@ -136,13 +137,37 @@ class FoldersService {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    // Recursively delete child folders
+    // First, recursively delete child folders (this will also delete their notes)
     final childFolders = await getFolderTree(parentId: folderId);
     for (final child in childFolders) {
       await deleteFolder(child.id);
     }
 
-    // Delete the folder itself
+    // Delete all notes directly in this folder (not in child folders, as they're already deleted)
+    final allNotesResponse = await _supabase
+        .from('notes')
+        .select()
+        .eq('user_id', user.id);
+    
+    final allNotes = (allNotesResponse as List)
+        .map((json) => Note.fromJson(json))
+        .toList();
+    
+    // Find notes directly in this folder (not in child folders)
+    final directNotes = allNotes.where((note) => 
+      note.data.folderId == folderId && note.deletedAt == null
+    ).toList();
+    
+    // Delete all direct notes
+    for (final note in directNotes) {
+      await _supabase
+          .from('notes')
+          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .eq('id', note.id)
+          .eq('user_id', user.id);
+    }
+
+    // Finally, delete the folder itself
     await _supabase
         .from('folders')
         .update({'deleted_at': DateTime.now().toIso8601String()})
@@ -150,11 +175,65 @@ class FoldersService {
         .eq('user_id', user.id);
   }
 
-  // Restore folder
+  // Restore folder (recursive: restores all child folders and notes)
   Future<void> restoreFolder(String folderId) async {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
+    // Get all folders including deleted ones
+    final allFolders = await getFolders(includeDeleted: true);
+    
+    // Recursively restore all child folders
+    final childFolders = allFolders.where((f) => 
+      f.data.parentId == folderId && f.deletedAt != null
+    ).toList();
+    
+    for (final child in childFolders) {
+      await restoreFolder(child.id);
+    }
+
+    // Restore all notes in this folder (and recursively in child folders)
+    // Get all notes and filter client-side since folder_id is in JSON data
+    final allNotesResponse = await _supabase
+        .from('notes')
+        .select()
+        .eq('user_id', user.id)
+        .not('deleted_at', 'is', null);
+    
+    final allNotes = (allNotesResponse as List)
+        .map((json) => Note.fromJson(json))
+        .where((note) => note.deletedAt != null)
+        .toList();
+    
+    // Find all notes in this folder and recursively in child folders
+    final notesToRestore = <Note>[];
+    
+    void findNotesInFolder(String targetFolderId) {
+      // Direct children
+      notesToRestore.addAll(allNotes.where((note) => note.data.folderId == targetFolderId));
+      
+      // Recursively find notes in child folders
+      final childFolders = allFolders.where((f) => 
+        f.data.parentId == targetFolderId && f.deletedAt != null
+      ).toList();
+      
+      for (final child in childFolders) {
+        findNotesInFolder(child.id);
+      }
+    }
+    
+    findNotesInFolder(folderId);
+    
+    // Restore all found notes
+    for (final note in notesToRestore) {
+      await _supabase
+          .from('notes')
+          .update({'deleted_at': null})
+          .eq('id', note.id)
+          .eq('user_id', user.id);
+    }
+
+    // Restore the folder itself
     await _supabase
         .from('folders')
         .update({'deleted_at': null})
@@ -236,10 +315,28 @@ class FoldersService {
     return true;
   }
 
-  // Get deleted folders
+  // Get deleted folders (only top-level, excluding children of deleted parents)
   Future<List<Folder>> getDeletedFolders() async {
-    return await getFolders(includeDeleted: true)
-        .then((folders) => folders.where((f) => f.deletedAt != null).toList());
+    final allFolders = await getFolders(includeDeleted: true);
+    final deletedFolders = allFolders.where((f) => f.deletedAt != null).toList();
+    
+    // Filter out folders whose parent is also deleted
+    // Only show folders where parent is null or parent is not deleted
+    return deletedFolders.where((folder) {
+      if (folder.data.parentId == null) {
+        // Top-level folder, always show
+        return true;
+      }
+      // Check if parent exists and is not deleted
+      final parentIndex = allFolders.indexWhere((f) => f.id == folder.data.parentId);
+      if (parentIndex == -1) {
+        // Parent not found, show the folder
+        return true;
+      }
+      final parent = allFolders[parentIndex];
+      // Show only if parent is not deleted
+      return parent.deletedAt == null;
+    }).toList();
   }
 }
 

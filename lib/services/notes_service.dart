@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../config/supabase.dart';
 import '../models/note.dart';
+import '../models/folder.dart';
 import 'package:uuid/uuid.dart';
 
 class NotesService {
@@ -137,11 +138,39 @@ class NotesService {
         .eq('user_id', user.id);
   }
 
-  // Restore note
+  // Restore note (only if parent folder is not deleted)
   Future<void> restoreNote(String noteId) async {
     final user = _supabase.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
+    // Get the note
+    final note = await getNote(noteId);
+    if (note == null) throw Exception('Note not found');
+
+    // Check if note has a parent folder
+    if (note.data.folderId != null) {
+      // Check if parent folder is deleted
+      try {
+        final folderResponse = await _supabase
+            .from('folders')
+            .select()
+            .eq('id', note.data.folderId!)
+            .eq('user_id', user.id)
+            .single();
+        
+        final folder = Folder.fromJson(folderResponse);
+        if (folder.deletedAt != null) {
+          throw Exception('Cannot restore note: parent folder is deleted. Please restore the parent folder first.');
+        }
+      } catch (e) {
+        // If folder not found or other error, allow restore (might be root note or orphaned)
+        if (e.toString().contains('parent folder is deleted')) {
+          rethrow;
+        }
+      }
+    }
+
+    // Restore the note
     await _supabase
         .from('notes')
         .update({'deleted_at': null})
@@ -222,10 +251,41 @@ class NotesService {
     return allNotes.where((note) => note.data.isFavorite).toList();
   }
 
-  // Get deleted notes
+  // Get deleted notes (only those whose parent folder is not deleted)
   Future<List<Note>> getDeletedNotes() async {
-    return await getNotes(includeDeleted: true)
-        .then((notes) => notes.where((note) => note.deletedAt != null).toList());
+    final user = _supabase.auth.currentUser;
+    if (user == null) throw Exception('Not authenticated');
+
+    // Get all deleted notes
+    final allNotes = await getNotes(includeDeleted: true);
+    final deletedNotes = allNotes.where((note) => note.deletedAt != null).toList();
+    
+    // Get all folders to check parent status
+    final allFoldersResponse = await _supabase
+        .from('folders')
+        .select()
+        .eq('user_id', user.id);
+    
+    final allFolders = (allFoldersResponse as List)
+        .map((json) => Folder.fromJson(json))
+        .toList();
+    
+    // Filter out notes whose parent folder is deleted
+    return deletedNotes.where((note) {
+      if (note.data.folderId == null) {
+        // Root note, always show
+        return true;
+      }
+      // Check if parent folder exists and is not deleted
+      final parentIndex = allFolders.indexWhere((f) => f.id == note.data.folderId);
+      if (parentIndex == -1) {
+        // Parent not found, show the note (might be orphaned)
+        return true;
+      }
+      final parent = allFolders[parentIndex];
+      // Show only if parent is not deleted
+      return parent.deletedAt == null;
+    }).toList();
   }
 }
 

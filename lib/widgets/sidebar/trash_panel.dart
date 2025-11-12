@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/notes_provider.dart';
 import '../../providers/folders_provider.dart';
-import '../../models/note.dart';
-import '../../models/folder.dart';
 
 class TrashPanel extends StatelessWidget {
   const TrashPanel({super.key});

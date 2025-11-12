@@ -98,6 +98,67 @@ class _MainScreenState extends State<MainScreen> {
     context.read<NotesProvider>().loadNotes(folderId: folderId);
   }
 
+  Future<void> _showCreateFolderDialog(BuildContext context) async {
+    final foldersProvider = context.read<FoldersProvider>();
+    final textController = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('새 폴더'),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '폴더 이름을 입력하세요',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = textController.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.of(context).pop(name);
+              }
+            },
+            child: const Text('생성'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && mounted) {
+      try {
+        final folder = await foldersProvider.createFolder(
+          name: result,
+          parentId: _selectedFolderId,
+        );
+        if (folder != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('폴더 "${result}"가 생성되었습니다'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('폴더 생성 중 오류가 발생했습니다: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _handleLogout(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -197,6 +258,9 @@ class _MainScreenState extends State<MainScreen> {
                       if (_currentViewIndex == 0) {
                         _explorerViewKey.currentState?.enterSelectionMode();
                       }
+                    } else if (value == 'add_folder') {
+                      // Create new folder
+                      _showCreateFolderDialog(context);
                     } else if (value == 'theme') {
                       // Toggle dark mode
                       themeProvider.toggleTheme();
@@ -216,6 +280,16 @@ class _MainScreenState extends State<MainScreen> {
                           Icon(Icons.check_circle_outline, size: 20),
                           SizedBox(width: 8),
                           Text('선택'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'add_folder',
+                      child: Row(
+                        children: [
+                          Icon(Icons.create_new_folder, size: 20),
+                          SizedBox(width: 8),
+                          Text('폴더 추가'),
                         ],
                       ),
                     ),

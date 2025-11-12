@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/tabs_provider.dart';
-import '../../providers/notes_provider.dart';
-import '../../services/notes_service.dart';
 
 class TabBarWidget extends StatelessWidget {
   const TabBarWidget({super.key});

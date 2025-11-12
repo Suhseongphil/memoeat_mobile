@@ -4,8 +4,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/notes_provider.dart';
 import '../../providers/folders_provider.dart';
 import '../../providers/tabs_provider.dart';
-import '../../models/note.dart';
-import '../../models/folder.dart';
 import '../folder_tree/folder_tree.dart';
 import '../note_list/note_list.dart';
 

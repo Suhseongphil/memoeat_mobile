@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../providers/notes_provider.dart';
 import '../../providers/tabs_provider.dart';
 import '../../models/note.dart';
-import '../note_list/note_list_item.dart';
 
 class MobileSearchSheet extends StatefulWidget {
   const MobileSearchSheet({super.key});

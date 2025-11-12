@@ -1,8 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/notes_provider.dart';
-import '../../providers/folders_provider.dart';
-import '../../providers/tabs_provider.dart';
 import 'explorer_panel.dart';
 import 'favorites_panel.dart';
 import 'search_panel.dart';
