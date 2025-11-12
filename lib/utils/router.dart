@@ -4,6 +4,7 @@ import '../screens/signup_screen.dart';
 import '../screens/main_screen.dart';
 import '../screens/admin_screen.dart';
 import '../screens/reset_password_screen.dart';
+import '../widgets/mobile_trash/trash_view.dart';
 
 final router = GoRouter(
   initialLocation: '/login',
@@ -27,6 +28,10 @@ final router = GoRouter(
     GoRoute(
       path: '/admin',
       builder: (context, state) => const AdminScreen(),
+    ),
+    GoRoute(
+      path: '/trash',
+      builder: (context, state) => const TrashView(),
     ),
   ],
 );

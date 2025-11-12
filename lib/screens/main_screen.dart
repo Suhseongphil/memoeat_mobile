@@ -200,6 +200,9 @@ class _MainScreenState extends State<MainScreen> {
                     } else if (value == 'theme') {
                       // Toggle dark mode
                       themeProvider.toggleTheme();
+                    } else if (value == 'trash') {
+                      // Navigate to trash
+                      context.go('/trash');
                     } else if (value == 'logout') {
                       // Logout
                       _handleLogout(context);
@@ -228,6 +231,16 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(themeProvider.isDark ? '라이트 모드' : '다크 모드'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'trash',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 20),
+                          SizedBox(width: 8),
+                          Text('휴지통'),
                         ],
                       ),
                     ),
