@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/notes_provider.dart';
 import '../providers/folders_provider.dart';
 import '../providers/tabs_provider.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/editor/editor.dart';
 import '../widgets/tab_bar/tab_bar.dart';
 import '../widgets/editor/editor_with_back_button.dart';
@@ -97,6 +98,35 @@ class _MainScreenState extends State<MainScreen> {
     context.read<NotesProvider>().loadNotes(folderId: folderId);
   }
 
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('로그아웃'),
+        content: const Text('로그아웃 하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('로그아웃'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.signOut();
+      if (mounted) {
+        context.go('/login');
+      }
+    }
+  }
+
   bool _isMobile(BuildContext context) {
     return MediaQuery.of(context).size.width < 1024;
   }
@@ -121,9 +151,12 @@ class _MainScreenState extends State<MainScreen> {
 
     // Mobile layout
     if (isMobile) {
+      final themeProvider = context.watch<ThemeProvider>();
       return Scaffold(
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: themeProvider.isDark
+              ? const Color(0xFF1E1E1E) // 다크모드: 검은색
+              : Colors.white, // 라이트모드: 하얀색
           leading: _currentViewIndex == 0 && _selectedFolderId != null
               ? IconButton(
                   icon: const Icon(Icons.arrow_back),
@@ -154,28 +187,66 @@ class _MainScreenState extends State<MainScreen> {
               },
             ),
             // Menu button
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                if (value == 'select') {
-                  // Enter selection mode
-                  if (_currentViewIndex == 0) {
-                    _explorerViewKey.currentState?.enterSelectionMode();
-                  }
-                }
+            Consumer<ThemeProvider>(
+              builder: (context, themeProvider, _) {
+                return PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) {
+                    if (value == 'select') {
+                      // Enter selection mode
+                      if (_currentViewIndex == 0) {
+                        _explorerViewKey.currentState?.enterSelectionMode();
+                      }
+                    } else if (value == 'theme') {
+                      // Toggle dark mode
+                      themeProvider.toggleTheme();
+                    } else if (value == 'logout') {
+                      // Logout
+                      _handleLogout(context);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'select',
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle_outline, size: 20),
+                          SizedBox(width: 8),
+                          Text('선택'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'theme',
+                      child: Row(
+                        children: [
+                          Icon(
+                            themeProvider.isDark
+                                ? Icons.dark_mode
+                                : Icons.light_mode,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(themeProvider.isDark ? '라이트 모드' : '다크 모드'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.logout, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            '로그아웃',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'select',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_outline, size: 20),
-                      SizedBox(width: 8),
-                      Text('선택'),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -203,9 +274,13 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: const Color(0xFFF59E0B), // 노란색
-          onPressed: () async {
+        floatingActionButton: Consumer<ThemeProvider>(
+          builder: (context, themeProvider, _) {
+            return FloatingActionButton(
+              backgroundColor: themeProvider.isDark
+                  ? const Color(0xFF569CD6) // 다크모드: 파란색
+                  : const Color(0xFFF59E0B), // 라이트모드: 노란색
+              onPressed: () async {
             final note = await notesProvider.createNote(
               folderId: _selectedFolderId,
             );
@@ -216,10 +291,12 @@ class _MainScreenState extends State<MainScreen> {
               });
             }
           },
-          child: const Icon(
-            Icons.add,
-            color: Colors.white,
-          ),
+              child: const Icon(
+                Icons.add,
+                color: Colors.white,
+              ),
+            );
+          },
         ),
       );
     }

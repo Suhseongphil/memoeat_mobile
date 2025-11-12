@@ -24,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadRememberMe();
+    _checkAutoLogin();
   }
 
   Future<void> _loadRememberMe() async {
@@ -31,6 +32,24 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _rememberMe = rememberMe;
     });
+  }
+
+  Future<void> _checkAutoLogin() async {
+    // AuthProvider 초기화 대기
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    if (!mounted) return;
+    
+    final authProvider = context.read<AuthProvider>();
+    
+    // 이미 로그인되어 있으면 메인 화면으로 이동
+    if (authProvider.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.go('/main');
+        }
+      });
+    }
   }
 
   @override
@@ -63,7 +82,18 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final authProvider = context.watch<AuthProvider>();
-    final isDark = themeProvider.isDark;
+
+    // build에서도 인증 상태 확인 (initState보다 빠르게 반응)
+    if (authProvider.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.go('/main');
+        }
+      });
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(

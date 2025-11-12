@@ -531,9 +531,9 @@ class _ExplorerViewState extends ExplorerViewState {
                     )
                   : (item.note!.data.isFavorite
                       ? IconButton(
-                          icon: Icon(
+                          icon: const Icon(
                             Icons.star,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: Colors.amber,
                           ),
                           onPressed: () {
                             context
@@ -715,7 +715,7 @@ class _NoteIcon extends StatelessWidget {
                               .onSurface
                               .withOpacity(0.3),
                         ),
-                        // 즐겨찾기 별 - 좌측 상단에 배치
+                        // 즐겨찾기 별 - 좌측 상단에 배치 (항상 노란색)
                         if (note.data.isFavorite)
                           Positioned(
                             top: -6,
@@ -723,7 +723,7 @@ class _NoteIcon extends StatelessWidget {
                             child: Icon(
                               Icons.star,
                               size: 28,
-                              color: Theme.of(context).colorScheme.primary,
+                              color: Colors.amber,
                             ),
                           ),
                       ],

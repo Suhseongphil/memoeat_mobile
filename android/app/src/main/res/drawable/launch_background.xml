@@ -4,7 +4,6 @@
     <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
+            android:src="@drawable/memoeat_app_logo_1024" />
     </item>
 </layer-list>
-
