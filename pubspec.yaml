@@ -1,0 +1,48 @@
+name: memoeat_mobile
+description: A new Flutter project.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+
+  # Supabase
+  supabase_flutter: ^2.5.0
+
+  # State Management
+  provider: ^6.1.0
+
+  # Routing
+  go_router: ^13.0.0
+
+  # Rich Text Editor
+  flutter_quill: ^11.5.0
+
+  # Local Storage
+  shared_preferences: ^2.2.0
+
+  # Network
+  connectivity_plus: ^6.0.0
+
+  # Utilities
+  uuid: ^4.0.0
+  
+  # Environment variables
+  flutter_dotenv: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - .env
